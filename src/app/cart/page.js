@@ -1,108 +1,160 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { auth, db } from "@/lib/firebase";
+import {
+  collection,
+  onSnapshot,
+  deleteDoc,
+  doc
+} from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useCart } from "@/context/CartContext";
 
 export default function CartPage() {
-  const { cartItems, removeFromCart } = useCart();
+  const router = useRouter();
+
+  const [user, setUser] = useState(null);
+  const [cartItems, setCartItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  /* =============================
+     AUTH CHECK
+  ============================== */
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (currentUser) => {
+      if (!currentUser) {
+        router.push("/login");
+      } else {
+        setUser(currentUser);
+      }
+    });
+
+    return () => unsub();
+  }, [router]);
+
+  /* =============================
+     REALTIME CART LISTENER
+  ============================== */
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = onSnapshot(
+      collection(db, "users", user.uid, "cart"),
+      (snapshot) => {
+        const items = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setCartItems(items);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
 
   const totalAmount = cartItems.reduce(
     (sum, item) => sum + item.price,
     0
   );
 
+  /* =============================
+     REMOVE ITEM
+  ============================== */
+  const handleRemove = async (id) => {
+    await deleteDoc(
+      doc(db, "users", user.uid, "cart", id)
+    );
+  };
+
+  /* =============================
+     UI
+  ============================== */
+
+  if (loading) {
+    return (
+      <div className="text-center py-20">
+        Loading...
+      </div>
+    );
+  }
+
   if (cartItems.length === 0) {
     return (
       <div className="text-center py-20">
-        <h2 className="text-xl font-semibold">
+        <h2 className="text-lg font-semibold">
           Your cart is empty
         </h2>
-        <p className="text-gray-500 mt-2">
-          Add items to your cart to continue
-        </p>
-
         <Link
           href="/"
-          className="inline-block mt-6 text-green-400 font-semibold"
+          className="text-green-600 font-semibold mt-4 inline-block"
         >
-          Browse products →
+          Go shopping →
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">
-        Your Cart
-      </h1>
+    <div className="max-w-2xl mx-auto space-y-6">
 
-      {/* Cart Items */}
-      <div className="space-y-4">
+      {/* CART ITEMS */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border">
+        <h2 className="font-semibold mb-4">
+          Your Cart
+        </h2>
+
         {cartItems.map((item) => (
           <div
             key={item.id}
-            className="flex items-center bg-white p-4 rounded-lg border"
+            className="flex items-center gap-4 mb-4"
           >
             <img
               src={item.imageUrl}
               alt={item.title}
-              className="w-20 h-20 object-cover rounded"
+              className="w-20 h-20 object-contain rounded-lg border"
             />
 
-            <div className="ml-4 flex-1">
-              <h3 className="font-semibold">
+            <div className="flex-1">
+              <p className="font-medium">
                 {item.title}
-              </h3>
+              </p>
               <p className="text-sm text-gray-500">
                 Size: {item.size}
               </p>
-              <p className="text-sm text-gray-500">
-                {item.shopName}
-              </p>
-            </div>
-
-            <div className="text-right">
-              <p className="font-bold">
+              <p className="text-sm font-semibold mt-1">
                 ₹{item.price}
               </p>
 
-              <button
-                onClick={() => removeFromCart(item.id)}
-                className="text-sm text-red-500 mt-2"
-              >
-                Remove
-              </button>
+              
             </div>
+
+            <button
+              onClick={() => handleRemove(item.id)}
+              className="text-red-500 text-sm font-medium"
+            >
+              Remove
+            </button>
           </div>
         ))}
-      </div>
 
-      {/* Cart Summary */}
-      <div className="mt-8 bg-white p-4 rounded-lg border">
-        <div className="flex justify-between text-lg font-semibold">
+        <div className="flex justify-between font-bold mt-4 text-lg">
           <span>Total</span>
           <span>₹{totalAmount}</span>
         </div>
-
-        <p className="text-sm text-gray-500 mt-1">
-          Includes product & delivery charges
-        </p>
-
-       <button
-  onClick={() => {
-    const user = localStorage.getItem("yahin_user");
-    if (!user) {
-      window.location.href = "/login";
-    } else {
-      window.location.href = "/checkout";
-    }
-  }}
-  className="mt-4 w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
->
-  Proceed to Checkout
-</button>
       </div>
+
+      {/* CHECKOUT BUTTON */}
+      <Link
+        href="/checkout"
+        className="block w-full bg-blue-600 text-white text-center py-3 rounded-xl font-semibold"
+      >
+        Proceed to Checkout
+      </Link>
+
     </div>
   );
 }

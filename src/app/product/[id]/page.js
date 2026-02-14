@@ -73,6 +73,11 @@ export default function ProductDetailPage() {
           {product.size}
         </p>
 
+        <p className="text-md">
+          <span className="text-gray-600">Shop Name: </span>
+          {product.shopName}
+        </p>
+
         <p className="text-xl font-bold text-green-600">
           <span className="text-gray-600 text-base font-normal">
             Price:{" "}

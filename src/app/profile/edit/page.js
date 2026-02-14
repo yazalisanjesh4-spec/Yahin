@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 
@@ -12,7 +12,7 @@ export default function EditProfilePage() {
   const [loading, setLoading] = useState(true);
 
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -28,7 +28,7 @@ export default function EditProfilePage() {
       if (snap.exists()) {
         const data = snap.data();
         setName(data.name || "");
-        setPhone(data.phone || "");
+        setPhoneNumber(data.phoneNumber || "");
       }
 
       setLoading(false);
@@ -38,19 +38,30 @@ export default function EditProfilePage() {
   }, [router]);
 
   const handleSave = async () => {
-    if (!name.trim() || !phone.trim()) {
+    if (!name.trim() || !phoneNumber.trim()) {
       alert("Please fill all fields");
       return;
     }
 
-    await updateDoc(doc(db, "users", user.uid), {
-      name,
-      phone,
-      email: user.email,
-    });
+    try {
+      // setDoc with merge ensures document is created if missing
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          name: name.trim(),
+          phoneNumber: phoneNumber.trim(),
+          email: user.email,
+        },
+        { merge: true }
+      );
 
-    alert("Profile updated successfully");
-    router.push("/profile");
+      alert("Profile updated successfully");
+      router.push("/profile");
+
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong");
+    }
   };
 
   if (loading) {
@@ -65,12 +76,10 @@ export default function EditProfilePage() {
     <div className="min-h-screen flex justify-center px-4 pt-10">
       <div className="w-full max-w-md">
 
-        {/* Header */}
         <h1 className="text-2xl font-semibold text-center mb-8">
           Edit Profile
         </h1>
 
-        {/* Form Card */}
         <div className="bg-white rounded-3xl shadow-sm p-6 space-y-6">
 
           {/* Name */}
@@ -87,7 +96,7 @@ export default function EditProfilePage() {
             />
           </div>
 
-          {/* Email (readonly) */}
+          {/* Email */}
           <div>
             <label className="text-sm text-gray-500 block mb-2">
               Email
@@ -107,17 +116,16 @@ export default function EditProfilePage() {
             </label>
             <input
               type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
               placeholder="Enter phone number"
               className="w-full bg-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 transition"
             />
           </div>
 
-          {/* Save Button */}
           <button
             onClick={handleSave}
-            className="w-full bg-green-400 text-white py-3 rounded-xl font-semibold"
+            className="w-full bg-green-600 text-white py-3 rounded-xl font-semibold hover:bg-green-700 transition"
           >
             Save Changes
           </button>

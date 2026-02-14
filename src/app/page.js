@@ -78,6 +78,9 @@ export default function HomePage() {
             <p className="font-bold text-sm mt-1">
               ₹{product.price}
             </p>
+
+            <p className="text-sm text-gray-800">
+               shopname : {product.shopName}</p>
           </Link>
         ))}
       </div>

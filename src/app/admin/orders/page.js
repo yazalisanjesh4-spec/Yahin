@@ -20,9 +20,22 @@ const STATUS_OPTIONS = [
   "Cancelled",
 ];
 
-function formatDate(date) {
-  if (!date) return "Unknown";
-  return new Date(date.seconds * 1000).toLocaleString("en-IN");
+function formatDate(timestamp) {
+  if (!timestamp) return "Unknown";
+
+  try {
+    if (timestamp.toDate) {
+      return timestamp.toDate().toLocaleString("en-IN");
+    }
+
+    if (timestamp.seconds) {
+      return new Date(timestamp.seconds * 1000).toLocaleString("en-IN");
+    }
+
+    return "Unknown";
+  } catch {
+    return "Unknown";
+  }
 }
 
 export default function AdminOrdersPage() {
@@ -36,9 +49,9 @@ export default function AdminOrdersPage() {
 
     const unsub = onSnapshot(q, (snapshot) => {
       setOrders(
-        snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
+        snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
         }))
       );
     });
@@ -58,95 +71,108 @@ export default function AdminOrdersPage() {
         )}
 
         <div className="space-y-6">
-          {orders.map((order, index) => (
-            <div
-              key={order.id}
-              className="bg-white border rounded-lg p-4"
-            >
-              {/* Header */}
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <p className="text-sm text-gray-500">
-                    Order ID: {order.id}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Placed at: {formatDate(order.createdAt)}
-                  </p>
+          {orders.map((order, index) => {
+            const safeAddress =
+              typeof order.address === "string"
+                ? order.address
+                : order.address?.address || "No address";
 
-                  {index === 0 && (
-                    <span className="inline-block mt-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded">
-                      NEW
-                    </span>
-                  )}
+            return (
+              <div
+                key={order.id}
+                className="bg-white border rounded-lg p-4"
+              >
+                {/* Header */}
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <p className="text-sm text-gray-500">
+                      Order ID: {order.id}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Placed at: {formatDate(order.createdAt)}
+                    </p>
+
+                    {index === 0 && (
+                      <span className="inline-block mt-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded">
+                        NEW
+                      </span>
+                    )}
+                  </div>
+
+                  <select
+                    className="border rounded px-2 py-1 text-sm"
+                    value={order.status}
+                    onChange={async (e) => {
+                      await updateDoc(
+                        doc(db, "orders", order.id),
+                        { status: e.target.value }
+                      );
+                    }}
+                  >
+                    {STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <select
-                  className="border rounded px-2 py-1 text-sm"
-                  value={order.status}
-                  onChange={async (e) => {
-                    await updateDoc(
-                      doc(db, "orders", order.id),
-                      { status: e.target.value }
-                    );
-                  }}
-                >
-                  {STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
+                {/* User Info */}
+                <div className="mb-3 text-sm space-y-1">
+                  <p>
+                    <strong>User:</strong>{" "}
+                    {order.userName || "—"}
+                  </p>
+                  <p>
+                    <strong>Email:</strong>{" "}
+                    {order.userEmail || "—"}
+                  </p>
+                  <p>
+                    <strong>Phone:</strong>{" "}
+                    {order.phoneNumber || "—"}
+                  </p>
+                  <p>
+                    <strong>Address:</strong>{" "}
+                    {safeAddress}
+                  </p>
+                </div>
+
+                {/* Items */}
+                <div className="space-y-2">
+                  {order.items?.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center text-sm"
+                    >
+                      <img
+                        src={item.imageUrl}
+                        alt={item.title}
+                        className="w-10 h-10 object-cover rounded"
+                        onError={(e) => {
+                          e.target.src =
+                            "https://via.placeholder.com/80x80?text=No+Image";
+                        }}
+                      />
+
+                      <span className="ml-3">
+                        {item.title} (Size {item.size})
+                      </span>
+
+                      <span className="ml-auto font-semibold">
+                        ₹{item.price}
+                      </span>
+                    </div>
                   ))}
-                </select>
-              </div>
+                </div>
 
-              {/* User Info */}
-              <div className="mb-3 text-sm">
-                <p>
-                  <strong>User:</strong> {order.userName}
-                </p>
-                <p>
-                  <strong>Email:</strong> {order.userEmail}
-                </p>
-                <p>
-                  <strong>Phone:</strong> {order.phoneNumber}
-                </p>
-                <p>
-                  <strong>Address:</strong> {order.address}
-                </p>
+                {/* Total */}
+                <div className="flex justify-between font-semibold mt-4">
+                  <span>Total</span>
+                  <span>₹{order.totalAmount}</span>
+                </div>
               </div>
-
-              {/* Items */}
-              <div className="space-y-2">
-                {order.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center text-sm"
-                  >
-                    <img
-                      src={item.imageUrl}
-                      alt={item.title}
-                      className="w-10 h-10 object-cover rounded"
-                      onError={(e) => {
-                        e.target.src =
-                          "https://via.placeholder.com/80x80?text=No+Image";
-                      }}
-                    />
-                    <span className="ml-3">
-                      {item.title} (Size {item.size})
-                    </span>
-                    <span className="ml-auto font-semibold">
-                      ₹{item.price}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Total */}
-              <div className="flex justify-between font-semibold mt-4">
-                <span>Total</span>
-                <span>₹{order.totalAmount}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </AdminGuard>
