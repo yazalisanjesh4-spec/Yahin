@@ -1,56 +1,75 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useCart } from "@/context/CartContext";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import {
   collection,
   getDocs,
-  doc,
   runTransaction,
+  doc,
   serverTimestamp,
 } from "firebase/firestore";
 import Link from "next/link";
 
 export default function CheckoutPage() {
-  const { cartItems } = useCart();
   const router = useRouter();
 
   const [currentUser, setCurrentUser] = useState(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+
+  const [cartItems, setCartItems] = useState([]);
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
-  const [loadingAuth, setLoadingAuth] = useState(true);
   const [placingOrder, setPlacingOrder] = useState(false);
 
-  const totalAmount = cartItems.reduce(
-    (sum, item) => sum + item.price,
-    0
-  );
-
   /* =============================
-     AUTH CHECK
+     AUTH FIX (NO LOOP)
   ============================== */
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (!user) {
-        router.push("/login");
-      } else {
-        setCurrentUser(user);
-      }
+      setCurrentUser(user);
       setLoadingAuth(false);
     });
 
     return () => unsubscribe();
-  }, [router]);
+  }, []);
+
+  useEffect(() => {
+    if (!loadingAuth && !currentUser) {
+      router.push("/login");
+    }
+  }, [loadingAuth, currentUser, router]);
+
+  /* =============================
+     FETCH CART (Firestore)
+  ============================== */
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const fetchCart = async () => {
+      const snapshot = await getDocs(
+        collection(db, "users", currentUser.uid, "cart")
+      );
+
+      const list = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setCartItems(list);
+    };
+
+    fetchCart();
+  }, [currentUser]);
 
   /* =============================
      FETCH ADDRESSES
   ============================== */
   useEffect(() => {
-    const fetchAddresses = async () => {
-      if (!currentUser) return;
+    if (!currentUser) return;
 
+    const fetchAddresses = async () => {
       const snapshot = await getDocs(
         collection(db, "users", currentUser.uid, "addresses")
       );
@@ -70,16 +89,19 @@ export default function CheckoutPage() {
     fetchAddresses();
   }, [currentUser]);
 
+  const totalAmount = cartItems.reduce(
+    (sum, item) => sum + item.price,
+    0
+  );
+
   /* =============================
-     ATOMIC PLACE ORDER
+     ATOMIC ORDER (TRANSACTION)
   ============================== */
   const handlePlaceOrder = async () => {
     if (!selectedAddress) {
       alert("Please select delivery address");
       return;
     }
-
-    if (!currentUser) return;
 
     try {
       setPlacingOrder(true);
@@ -88,7 +110,7 @@ export default function CheckoutPage() {
 
         // 1️⃣ Check availability
         for (let item of cartItems) {
-          const productRef = doc(db, "products", item.id);
+          const productRef = doc(db, "products", item.productId);
           const productSnap = await transaction.get(productRef);
 
           if (!productSnap.exists()) {
@@ -102,7 +124,7 @@ export default function CheckoutPage() {
 
         // 2️⃣ Lock products
         for (let item of cartItems) {
-          const productRef = doc(db, "products", item.id);
+          const productRef = doc(db, "products", item.productId);
           transaction.update(productRef, {
             isAvailable: false,
           });
@@ -120,18 +142,27 @@ export default function CheckoutPage() {
           createdAt: serverTimestamp(),
         });
 
+        // 4️⃣ Clear cart
+        for (let item of cartItems) {
+          const cartRef = doc(
+            db,
+            "users",
+            currentUser.uid,
+            "cart",
+            item.id
+          );
+          transaction.delete(cartRef);
+        }
+
       });
 
-      localStorage.removeItem("yahin_cart");
       router.push("/order-confirmation");
 
     } catch (error) {
-      console.error(error);
-
       if (error.message === "Product already sold") {
-        alert("Sorry, this product was just sold to another user.");
+        alert("Sorry, this product was just sold.");
       } else {
-        alert("Something went wrong. Please try again.");
+        alert("Something went wrong.");
       }
     } finally {
       setPlacingOrder(false);
@@ -146,17 +177,15 @@ export default function CheckoutPage() {
     return <div className="text-center py-20">Loading...</div>;
   }
 
+  if (!currentUser) return null;
+
   if (cartItems.length === 0) {
     return (
       <div className="text-center py-20">
-        <h2 className="text-lg font-semibold">
-          Your cart is empty
-        </h2>
-        <Link
-          href="/"
-          className="text-green-600 font-semibold mt-4 inline-block"
-        >
-          Go shopping →
+        Cart is empty
+        <br />
+        <Link href="/" className="text-green-600">
+          Go Shopping →
         </Link>
       </div>
     );
@@ -169,24 +198,18 @@ export default function CheckoutPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
 
-      {/* ADDRESS SECTION */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border">
+      <div className="bg-white p-4 rounded-xl border">
         <h2 className="font-semibold mb-3">
           Select Delivery Address
         </h2>
 
         {addresses.length === 0 ? (
-          <>
-            <p className="text-sm text-gray-500 mb-3">
-              No saved addresses found.
-            </p>
-            <Link
-              href="/profile/address"
-              className="text-green-600 font-semibold"
-            >
-              + Add New Address
-            </Link>
-          </>
+          <Link
+            href="/profile/address"
+            className="text-green-600 font-semibold"
+          >
+            + Add New Address
+          </Link>
         ) : (
           addresses.map((addr) => (
             <div
@@ -198,14 +221,13 @@ export default function CheckoutPage() {
                   : "border-gray-200"
               }`}
             >
-              <p className="font-medium">{addr.address}</p>
+              <p>{addr.address}</p>
             </div>
           ))
         )}
       </div>
 
-      {/* ORDER SUMMARY */}
-      <div className="bg-white shadow-xl p-4 rounded-2xl shadow-sm ">
+      <div className="bg-white p-4 rounded-xl border">
         <h2 className="font-semibold mb-4">
           Order Summary
         </h2>
@@ -214,47 +236,33 @@ export default function CheckoutPage() {
           <div key={item.id} className="flex gap-4 mb-4">
             <img
               src={item.imageUrl}
-              alt={item.title}
-              className="w-20 h-20 object-contain rounded-lg border"
+              className="w-20 h-20 object-contain border rounded"
             />
             <div>
               <p className="font-medium">{item.title}</p>
               <p className="text-sm text-gray-500">
                 Size: {item.size}
               </p>
-              <p className="text-sm font-semibold">
+              <p className="font-semibold">
                 ₹{item.price}
               </p>
             </div>
           </div>
         ))}
 
-        <div className="flex justify-between font-bold mt-4 text-lg">
+        <div className="flex justify-between font-bold text-lg mt-4">
           <span>Total</span>
           <span>₹{totalAmount}</span>
         </div>
       </div>
 
-      {/* PAYMENT SECTION */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border text-center">
-        <h2 className="font-semibold mb-3">
-          Pay using UPI
-        </h2>
-
-        <img
-          src="/upi-qr.png"
-          alt="UPI QR"
-          className="w-48 h-48 mx-auto border rounded-lg mb-4"
-        />
-
-        <button
-          onClick={handlePlaceOrder}
-          disabled={placingOrder}
-          className="w-full bg-green-600 text-white py-3 rounded-xl font-semibold hover:bg-green-700 transition disabled:opacity-50"
-        >
-          {placingOrder ? "Placing Order..." : "I have paid"}
-        </button>
-      </div>
+      <button
+        onClick={handlePlaceOrder}
+        disabled={placingOrder}
+        className="w-full bg-green-600 text-white py-3 rounded-xl font-semibold"
+      >
+        {placingOrder ? "Placing..." : "I have paid"}
+      </button>
 
     </div>
   );

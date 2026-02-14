@@ -1,36 +1,64 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
+import { auth, db } from "@/lib/firebase";
+import {
+  collection,
+  addDoc,
+  deleteDoc,
+  doc,
+  getDocs,
+} from "firebase/firestore";
 
 const CartContext = createContext();
 
 export function CartProvider({ children }) {
   const [cartItems, setCartItems] = useState([]);
+  const [user, setUser] = useState(null);
 
-  // Load cart from localStorage
   useEffect(() => {
-    const storedCart = localStorage.getItem("yahin_cart");
-    if (storedCart) {
-      setCartItems(JSON.parse(storedCart));
-    }
+    const unsubscribe = auth.onAuthStateChanged(async (u) => {
+      setUser(u);
+
+      if (u) {
+        const snapshot = await getDocs(
+          collection(db, "users", u.uid, "cart")
+        );
+
+        const list = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setCartItems(list);
+      } else {
+        setCartItems([]);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  // Save cart to localStorage
-  useEffect(() => {
-    localStorage.setItem("yahin_cart", JSON.stringify(cartItems));
-  }, [cartItems]);
+  const addToCart = async (product) => {
+    if (!user) return;
 
-  const addToCart = (product) => {
-    setCartItems((prev) => {
-      const exists = prev.find((item) => item.id === product.id);
-      if (exists) return prev;
-      return [...prev, product];
-    });
+    await addDoc(
+      collection(db, "users", user.uid, "cart"),
+      {
+        productId: product.id,
+        title: product.title,
+        price: product.price,
+        imageUrl: product.imageUrl,
+        size: product.size,
+      }
+    );
   };
 
-  const removeFromCart = (id) => {
-    setCartItems((prev) =>
-      prev.filter((item) => item.id !== id)
+  const removeFromCart = async (cartId) => {
+    if (!user) return;
+
+    await deleteDoc(
+      doc(db, "users", user.uid, "cart", cartId)
     );
   };
 
@@ -43,6 +71,4 @@ export function CartProvider({ children }) {
   );
 }
 
-export function useCart() {
-  return useContext(CartContext);
-}
+export const useCart = () => useContext(CartContext);
