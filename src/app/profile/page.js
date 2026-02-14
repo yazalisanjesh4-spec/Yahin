@@ -76,7 +76,7 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-6">
+      <h1 className="text-3xl font-bold mb-6">
         My Profile
       </h1>
 
@@ -84,7 +84,7 @@ export default function ProfilePage() {
         <input
           type="text"
           placeholder="Name"
-          className="w-full border rounded px-3 py-2"
+          className="w-full border rounded-full px-3 py-2"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
@@ -93,13 +93,13 @@ export default function ProfilePage() {
           type="email"
           value={user.email}
           disabled
-          className="w-full border rounded px-3 py-2 bg-gray-100"
+          className="w-full border rounded-full px-3 py-2 bg-gray-100"
         />
 
         <input
           type="tel"
           placeholder="Phone number"
-          className="w-full border rounded px-3 py-2"
+          className="w-full border rounded-full px-3 py-2"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
@@ -114,14 +114,14 @@ export default function ProfilePage() {
 
         <button
           onClick={handleSave}
-          className="w-full bg-green-600 text-white py-2 rounded font-semibold"
+          className="w-full bg-green-400 text-white py-2 rounded-full font-semibold"
         >
           Save Profile
         </button>
 
         <button
           onClick={handleLogout}
-          className="w-full border border-red-500 text-red-500 py-2 rounded"
+          className="w-full border bg-red-500 border-red-500 text-white py-2 rounded-full"
         >
           Logout
         </button>

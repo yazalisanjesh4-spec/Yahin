@@ -19,7 +19,7 @@ export default function RootLayout({ children }) {
         {!hideHeader && (
           <header className="bg-white">
             <div className="max-w-7xl mx-auto px-4 py-4">
-              <h1 className="text-4xl font-extrabold text-blue-400">
+              <h1 className="text-5xl font-extrabold text-blue-400">
                 Yahin!
               </h1>
               <p className="text-xs text-gray-500 mt-3">

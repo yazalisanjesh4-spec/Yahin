@@ -55,7 +55,7 @@ export default function HomePage() {
           <Link
             key={product.id}
             href={`/product/${product.id}`}
-            className="bg-white border rounded-lg p-3 hover:shadow-sm"
+            className="bg-white  rounded-lg p-3 hover:shadow-sm"
           >
             <img
               src={product.imageUrl}

@@ -23,7 +23,7 @@ export default function CartPage() {
 
         <Link
           href="/"
-          className="inline-block mt-6 text-green-600 font-semibold"
+          className="inline-block mt-6 text-green-400 font-semibold"
         >
           Browse products →
         </Link>
@@ -98,7 +98,7 @@ export default function CartPage() {
       window.location.href = "/checkout";
     }
   }}
-  className="mt-4 w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition"
+  className="mt-4 w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
 >
   Proceed to Checkout
 </button>
