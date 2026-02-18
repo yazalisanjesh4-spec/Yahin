@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   collection,
   onSnapshot,
@@ -22,16 +22,13 @@ const STATUS_OPTIONS = [
 
 function formatDate(timestamp) {
   if (!timestamp) return "Unknown";
-
   try {
     if (timestamp.toDate) {
       return timestamp.toDate().toLocaleString("en-IN");
     }
-
     if (timestamp.seconds) {
       return new Date(timestamp.seconds * 1000).toLocaleString("en-IN");
     }
-
     return "Unknown";
   } catch {
     return "Unknown";
@@ -40,6 +37,9 @@ function formatDate(timestamp) {
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
+  const [activeTab, setActiveTab] = useState(
+    "Payment verification pending"
+  );
 
   useEffect(() => {
     const q = query(
@@ -59,19 +59,46 @@ export default function AdminOrdersPage() {
     return () => unsub();
   }, []);
 
+  const filteredOrders = useMemo(() => {
+    return orders.filter(
+      (order) => order.status === activeTab
+    );
+  }, [orders, activeTab]);
+
   return (
     <AdminGuard>
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto px-4">
+
         <h1 className="text-2xl font-bold mb-6">
           Manage Orders
         </h1>
 
-        {orders.length === 0 && (
-          <p className="text-gray-500">No orders yet</p>
+        {/* 🔹 STATUS TABS */}
+        <div className="flex flex-wrap gap-3 mb-6">
+          {STATUS_OPTIONS.map((status) => (
+            <button
+              key={status}
+              onClick={() => setActiveTab(status)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition
+                ${
+                  activeTab === status
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-100 text-gray-700"
+                }`}
+            >
+              {status}
+            </button>
+          ))}
+        </div>
+
+        {filteredOrders.length === 0 && (
+          <p className="text-gray-500">
+            No orders in this category
+          </p>
         )}
 
         <div className="space-y-6">
-          {orders.map((order, index) => {
+          {filteredOrders.map((order) => {
             const safeAddress =
               typeof order.address === "string"
                 ? order.address
@@ -80,10 +107,10 @@ export default function AdminOrdersPage() {
             return (
               <div
                 key={order.id}
-                className="bg-white border rounded-lg p-4"
+                className="bg-white border rounded-xl p-5 shadow-sm"
               >
-                {/* Header */}
-                <div className="flex justify-between items-start mb-3">
+                {/* HEADER */}
+                <div className="flex justify-between items-start mb-4">
                   <div>
                     <p className="text-sm text-gray-500">
                       Order ID: {order.id}
@@ -91,16 +118,10 @@ export default function AdminOrdersPage() {
                     <p className="text-sm text-gray-500">
                       Placed at: {formatDate(order.createdAt)}
                     </p>
-
-                    {index === 0 && (
-                      <span className="inline-block mt-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded">
-                        NEW
-                      </span>
-                    )}
                   </div>
 
                   <select
-                    className="border rounded px-2 py-1 text-sm"
+                    className="border rounded px-3 py-1 text-sm"
                     value={order.status}
                     onChange={async (e) => {
                       await updateDoc(
@@ -117,10 +138,10 @@ export default function AdminOrdersPage() {
                   </select>
                 </div>
 
-                {/* User Info */}
-                <div className="mb-3 text-sm space-y-1">
+                {/* USER INFO */}
+                <div className="mb-4 text-sm space-y-1">
                   <p>
-                    <strong>User:</strong>{" "}
+                    <strong>Name:</strong>{" "}
                     {order.userName || "—"}
                   </p>
                   <p>
@@ -129,7 +150,7 @@ export default function AdminOrdersPage() {
                   </p>
                   <p>
                     <strong>Phone:</strong>{" "}
-                    {order.phoneNumber || "—"}
+                    {order.phone || order.phoneNumber || "—"}
                   </p>
                   <p>
                     <strong>Address:</strong>{" "}
@@ -137,8 +158,8 @@ export default function AdminOrdersPage() {
                   </p>
                 </div>
 
-                {/* Items */}
-                <div className="space-y-2">
+                {/* ITEMS */}
+                <div className="space-y-3">
                   {order.items?.map((item) => (
                     <div
                       key={item.id}
@@ -147,16 +168,21 @@ export default function AdminOrdersPage() {
                       <img
                         src={item.imageUrl}
                         alt={item.title}
-                        className="w-10 h-10 object-cover rounded"
+                        className="w-12 h-12 object-cover rounded border"
                         onError={(e) => {
                           e.target.src =
                             "https://via.placeholder.com/80x80?text=No+Image";
                         }}
                       />
 
-                      <span className="ml-3">
-                        {item.title} (Size {item.size})
-                      </span>
+                      <div className="ml-4">
+                        <p className="font-medium">
+                          {item.title}
+                        </p>
+                        <p className="text-gray-500 text-xs">
+                          Size {item.size}
+                        </p>
+                      </div>
 
                       <span className="ml-auto font-semibold">
                         ₹{item.price}
@@ -165,8 +191,8 @@ export default function AdminOrdersPage() {
                   ))}
                 </div>
 
-                {/* Total */}
-                <div className="flex justify-between font-semibold mt-4">
+                {/* TOTAL */}
+                <div className="flex justify-between font-semibold mt-5 border-t pt-3">
                   <span>Total</span>
                   <span>₹{order.totalAmount}</span>
                 </div>

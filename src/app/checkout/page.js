@@ -41,7 +41,7 @@ export default function CheckoutPage() {
       );
 
       const cart = cartSnap.docs.map((doc) => ({
-        id: doc.id, // productId (because we used setDoc with productId as doc id)
+        id: doc.id,
         ...doc.data(),
       }));
 
@@ -58,7 +58,10 @@ export default function CheckoutPage() {
       }));
 
       setAddresses(addrList);
-      if (addrList.length > 0) setSelectedAddress(addrList[0]);
+
+      if (addrList.length > 0) {
+        setSelectedAddress(addrList[0]);
+      }
 
       setLoading(false);
     });
@@ -72,7 +75,7 @@ export default function CheckoutPage() {
   );
 
   /* =========================
-     PLACE ORDER
+     PLACE ORDER (ATOMIC + PROFILE SAFE)
   ========================== */
   const handlePlaceOrder = async () => {
     if (!selectedAddress) {
@@ -87,11 +90,23 @@ export default function CheckoutPage() {
 
       await runTransaction(db, async (transaction) => {
 
+        // 🔹 1️⃣ Fetch user profile
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await transaction.get(userRef);
+
+        if (!userSnap.exists()) {
+          throw new Error("USER_DATA_MISSING");
+        }
+
+        const userData = userSnap.data();
+
+        if (!userData.name || !userData.phone) {
+          throw new Error("PROFILE_INCOMPLETE");
+        }
+
+        // 🔹 2️⃣ Validate and lock products
         for (let item of cartItems) {
-
-          // ✅ FIXED HERE
           const productRef = doc(db, "products", item.productId);
-
           const productSnap = await transaction.get(productRef);
 
           if (!productSnap.exists()) {
@@ -102,17 +117,19 @@ export default function CheckoutPage() {
             throw new Error("PRODUCT_SOLD");
           }
 
-          // Lock product
           transaction.update(productRef, {
             isAvailable: false,
           });
         }
 
+        // 🔹 3️⃣ Create Order
         const orderRef = doc(collection(db, "orders"));
 
         transaction.set(orderRef, {
           userId: user.uid,
           userEmail: user.email,
+          userName: userData.name,
+          phone: userData.phone,
           address: selectedAddress.address,
           items: cartItems,
           totalAmount,
@@ -121,7 +138,7 @@ export default function CheckoutPage() {
         });
       });
 
-      // Clear cart
+      // 🔹 4️⃣ Clear Cart
       for (let item of cartItems) {
         await deleteDoc(
           doc(db, "users", user.uid, "cart", item.id)
@@ -131,14 +148,22 @@ export default function CheckoutPage() {
       router.push("/order-confirmation");
 
     } catch (error) {
-      if (error.message === "PRODUCT_DELETED") {
+
+      if (error.message === "PROFILE_INCOMPLETE") {
+        alert("Please complete your profile before ordering.");
+        router.push("/profile/edit");
+      }
+      else if (error.message === "PRODUCT_DELETED") {
         alert("One product was removed from store.");
-      } else if (error.message === "PRODUCT_SOLD") {
+      }
+      else if (error.message === "PRODUCT_SOLD") {
         alert("Sorry, product already sold.");
-      } else {
+      }
+      else {
         console.error(error);
         alert("Something went wrong.");
       }
+
     } finally {
       setPlacingOrder(false);
     }
@@ -184,7 +209,7 @@ export default function CheckoutPage() {
         ))}
       </div>
 
-      {/* SUMMARY */}
+      {/* ORDER SUMMARY */}
       <div className="bg-white p-4 rounded-xl border">
         <h2 className="font-semibold mb-4">Order Summary</h2>
 
@@ -192,8 +217,8 @@ export default function CheckoutPage() {
           <div key={item.id} className="flex gap-4 mb-4">
             <img
               src={item.imageUrl}
-              className="w-16 h-16 object-contain border rounded"
               alt={item.title}
+              className="w-16 h-16 object-contain border rounded"
             />
             <div>
               <p className="font-medium">{item.title}</p>
